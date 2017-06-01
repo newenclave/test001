@@ -1,0 +1,8 @@
+include/srpc/common/protocol/*.pb.*
+*.user
+*.autosave
+*.user.*
+\#*
+srpc-import.cmake
+*~
+
