@@ -16,5 +16,5 @@ find_package( Boost 1.53 COMPONENTS
                 REQUIRED)
 
 
-add_executable(test001 "main.cpp")
+add_executable(test001 "main.cpp" "client.cpp" )
 target_link_libraries( test001 ${Boost_LIBRARIES} )
