@@ -31,20 +31,38 @@ struct tcp_acceptor: public i_accept {
 
         tcp_client( ba::io_service &ios )
             :sock_(ios)
+            ,block_(4096)
         { }
 
         void close( )
         {
-
+            sock_.close( );
         }
 
-        void async_read( read_cb )
+        void async_read( read_cb cb )
         {
+            std::weak_ptr<i_client> weak_this(shared_from_this( ));
 
+            auto this_cb = [cb, weak_this](const error_code &e, std::size_t l) {
+                if( e ) {
+                    std::cout << "read error " << e.message( ) << "\n";
+                    cb(e, 0);
+                    return;
+                }
+                auto lock = weak_this.lock( );
+                if( lock ) {
+                    cb(e, l);
+                } else {
+                    cb( e, 0 );
+                    return;
+                }
+            };
+            sock_.async_read_some( ba::buffer(block_), this_cb );
         }
 
         std::weak_ptr<i_accept> parent_;
         ba::ip::tcp::socket sock_;
+        std::vector<char> block_;
     };
 
     tcp_acceptor( ba::io_service &ios )
@@ -74,13 +92,12 @@ struct tcp_acceptor: public i_accept {
                     return;
                 }
             }
-            cb(err, std::shared_ptr<i_client>( ) );
+            cb( err, std::shared_ptr<i_client>( ) );
         };
 
         acc_.async_accept( client->sock_, this_cb );
     }
 
-    ba::ip::tcp::endpoint ep_;
     ba::ip::tcp::acceptor acc_;
 };
 
@@ -88,6 +105,7 @@ int main_c( );
 int main_s( )
 {
     try {
+
         ba::io_service ios;
         ba::io_service::work wrk(ios);
 
@@ -95,8 +113,10 @@ int main_s( )
 
         ta->async_accept( [ta](const error_code &e, std::shared_ptr<i_client> c) {
             std::cout << e.message( ) << " Accept!\n";
-            ta->close( );
-            ta->acc_.get_io_service( ).stop( );
+            c->async_read( [ta, c]( const error_code &e, std::size_t l ) {
+                std::cout << e.message( ) <<  ": Read " << l << " bytes!\n";
+                ta->acc_.get_io_service( ).stop( );
+            } );
         } );
 
         ios.run( );
