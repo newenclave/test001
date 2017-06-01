@@ -1,7 +1,7 @@
 #include <iostream>
 
 #include "ifaces.h"
-#include "sream_writer.h"
+#include "stream_writer.h"
 
 namespace ba = boost::asio;
 namespace bs = boost::system;
