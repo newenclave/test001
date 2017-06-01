@@ -41,7 +41,7 @@ struct tcp_acceptor: public i_accept {
                     return;
                 }
             };
-            sock_.async_read_some( ba::buffer(block_), this_cb );
+            sock_.async_read_some( ba::buffer(block_), std::move(this_cb) );
         }
 
         void async_write_all(  )
@@ -84,15 +84,27 @@ struct tcp_acceptor: public i_accept {
             cb( err, std::shared_ptr<i_client>( ) );
         };
 
-        acc_.async_accept( client->sock_, this_cb );
+        acc_.async_accept( client->sock_, std::move(this_cb) );
     }
 
     ba::ip::tcp::acceptor acc_;
 };
 
 int main_c( );
+
+struct test_call {
+    void call( )
+    {
+        count_ ++;
+    }
+    std::size_t count_ = 0;
+};
+
+
+
 int main_s( )
 {
+
     try {
 
         ba::io_service ios;
