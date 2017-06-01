@@ -1,29 +1,13 @@
 #include <iostream>
 #include <memory>
 
-#include "boost/asio.hpp"
+#include "ifaces.h"
+
+#include <sys/types.h>
+#include <sys/sysctl.h>
 
 namespace ba = boost::asio;
 namespace bs = boost::system;
-
-using error_code = bs::error_code;
-
-using read_cb = std::function<void ( const error_code &, std::size_t ) >;
-
-struct i_client: public std::enable_shared_from_this<i_client> {
-    virtual ~i_client( ) = default;
-    virtual void close( ) = 0;
-    virtual void async_read( read_cb ) = 0;
-};
-
-using accept_cb = std::function<void ( const error_code &,
-                                       std::shared_ptr<i_client>) >;
-
-struct i_accept: public std::enable_shared_from_this<i_accept> {
-    virtual ~i_accept( ) = default;
-    virtual void close( ) = 0;
-    virtual void async_accept( accept_cb ) = 0;
-};
 
 struct tcp_acceptor: public i_accept {
 
@@ -58,6 +42,11 @@ struct tcp_acceptor: public i_accept {
                 }
             };
             sock_.async_read_some( ba::buffer(block_), this_cb );
+        }
+
+        void async_write_all(  )
+        {
+
         }
 
         std::weak_ptr<i_accept> parent_;
