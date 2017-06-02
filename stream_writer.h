@@ -27,8 +27,7 @@ struct stream_writer {
             :message(std::move(mess))
         { }
 
-        virtual
-        ~queue_element( ) = default;
+        virtual ~queue_element( ) = default;
 
         const char *data( ) const override
         {
@@ -41,20 +40,16 @@ struct stream_writer {
         }
 
         void precall( ) override
-        {
-
-        }
+        { }
 
         void postcall( const error_code &, std::size_t ) override
-        {
-
-        }
+        { }
 
         message_type message;
     };
 
-    using message_sptr  = std::shared_ptr<queue_element>;
-    using message_uptr  = std::shared_ptr<queue_element>;
+    using message_sptr  = std::shared_ptr<message>;
+    using message_uptr  = std::unique_ptr<message>;
     using message_queue = std::queue<message_uptr>;
 
     message_uptr make_element( message_type mess )
@@ -134,9 +129,8 @@ private:
 
                 total += bytes;
 
-                const message_type &top_mess( top.message );
-                async_write( top_mess.data( ) + total,
-                             top_mess.size( ) - total, total,
+                async_write( top.data( ) + total,
+                             top.size( ) - total, total,
                              std::move(wp) );
 
             } else {
@@ -161,10 +155,9 @@ private:
                 async_write( std::move(wp) );
             }
         }
-
     }
 
-    void write_impl( message_uptr message, weak_pointer wp )
+    void write_impl( std::shared_ptr<message_uptr> message, weak_pointer wp )
     {
         auto sp = wp.lock( );
         if( !sp ) {
@@ -172,7 +165,7 @@ private:
         }
 
         const bool empty = queue_.empty( );
-        queue_.emplace( std::move(message) );
+        queue_.emplace( std::move(*message) );
         if( empty ) {
             async_write( std::move(wp) );
         }
@@ -182,8 +175,9 @@ public:
 
     void write( message_uptr message, weak_pointer wp )
     {
+        auto suptr = std::make_shared<message_uptr>(std::move(message));
         dispatcher_.post( std::bind( &this_type::write_impl, this,
-                                     std::move(message), std::move(wp) ) );
+                                     std::move(suptr), std::move(wp) ) );
 
     }
 

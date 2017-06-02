@@ -26,14 +26,25 @@ struct tcp_connector: public i_client {
         sock_.get_stream( ).close( );
     }
 
-    void async_read( read_cb )
+    void async_read( std::string&, read_cb )
     {
 
     }
 
-    void async_write_all( std::string mess )
+    std::uintptr_t native_handle( ) override
+    {
+        using uptr = std::uintptr_t;
+        return static_cast<uptr>(sock_.get_stream( ).native_handle( ));
+    }
+
+    void async_write_all( message::unique_ptr mess ) override
     {
         sock_.write( std::move(mess), shared_from_this( ) );
+    }
+
+    void async_write( message_type message )
+    {
+        sock_.write( std::move(message), shared_from_this( ) );
     }
 
     stream_writer<ba::ip::tcp::socket> sock_;
@@ -49,7 +60,7 @@ int main_c( )
         auto tcp_conn = std::make_shared<tcp_connector>(std::ref(ios));
 
         tcp_conn->connect( "127.0.0.1", 44556 );
-        tcp_conn->async_write_all( std::string(1024 * 1024, '!') );
+        tcp_conn->async_write( std::string(1024 * 1024, '!') );
 
         ios.run( );
 

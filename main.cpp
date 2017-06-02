@@ -2,9 +2,7 @@
 #include <memory>
 
 #include "ifaces.h"
-
-#include <sys/types.h>
-#include <sys/sysctl.h>
+#include "stream_writer.h"
 
 namespace ba = boost::asio;
 namespace bs = boost::system;
@@ -15,15 +13,14 @@ struct tcp_acceptor: public i_accept {
 
         tcp_client( ba::io_service &ios )
             :sock_(ios)
-            ,block_(4096)
         { }
 
         void close( )
         {
-            sock_.close( );
+            sock_.get_stream( ).close( );
         }
 
-        void async_read( read_cb cb )
+        void async_read( message_type & mess, read_cb cb ) override
         {
             std::weak_ptr<i_client> weak_this(shared_from_this( ));
 
@@ -41,17 +38,24 @@ struct tcp_acceptor: public i_accept {
                     return;
                 }
             };
-            sock_.async_read_some( ba::buffer(block_), std::move(this_cb) );
+            sock_.get_stream( ).async_read_some( ba::buffer(&mess[0],
+                                                            mess.size( )),
+                                                 std::move(this_cb) );
         }
 
-        void async_write_all( std::string mess )
+        std::uintptr_t native_handle( ) override
         {
+            using uptr = std::uintptr_t;
+            return static_cast<uptr>(sock_.get_stream( ).native_handle( ));
+        }
 
+        void async_write_all( message::unique_ptr mess ) override
+        {
+            sock_.write( std::move(mess), shared_from_this( ) );
         }
 
         std::weak_ptr<i_accept> parent_;
-        ba::ip::tcp::socket sock_;
-        std::vector<char> block_;
+        stream_writer<ba::ip::tcp::socket> sock_;
     };
 
     tcp_acceptor( ba::io_service &ios )
@@ -84,7 +88,7 @@ struct tcp_acceptor: public i_accept {
             cb( err, std::shared_ptr<i_client>( ) );
         };
 
-        acc_.async_accept( client->sock_, std::move(this_cb) );
+        acc_.async_accept( client->sock_.get_stream( ), std::move(this_cb) );
     }
 
     ba::ip::tcp::acceptor acc_;
@@ -97,10 +101,13 @@ int main_s( )
 
         ba::io_service ios;
         ba::io_service::work wrk(ios);
+        std::string message(1024, '\0');
 
         auto ta = std::make_shared<tcp_acceptor>(std::ref(ios));
 
-        ta->async_accept( [ta](const error_code &e, std::shared_ptr<i_client> c) {
+        ta->async_accept( [ta, &message](const error_code &e,
+                                         std::shared_ptr<i_client> c)
+        {
             std::cout << e.message( ) << " Accept!\n";
 
             auto call = [ta, c ]( const error_code &e, std::size_t l ) {
@@ -108,7 +115,7 @@ int main_s( )
                           << std::endl;
                 // ta->acc_.get_io_service( ).stop( );
             };
-            c->async_read( call );
+            c->async_read( message, call );
         } );
 
         ios.run( );
