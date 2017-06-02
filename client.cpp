@@ -21,12 +21,12 @@ struct tcp_connector: public i_client {
                     tcp_ep(ba::ip::address::from_string(addr), port) );
     }
 
-    void close( )
+    void close( ) override
     {
         sock_.get_stream( ).close( );
     }
 
-    void async_read( std::string&, read_cb )
+    void async_read( std::string *, read_cb ) override
     {
 
     }

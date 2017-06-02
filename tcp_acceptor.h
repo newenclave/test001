@@ -15,12 +15,12 @@ struct tcp_acceptor: public i_accept {
             :sock_(ios)
         { }
 
-        void close( )
+        void close( ) override
         {
             sock_.get_stream( ).close( );
         }
 
-        void async_read( message_type & mess, read_cb cb ) override
+        void async_read( message_type * mess, read_cb cb ) override
         {
             std::weak_ptr<i_client> weak_this(shared_from_this( ));
 
@@ -38,8 +38,8 @@ struct tcp_acceptor: public i_accept {
                     return;
                 }
             };
-            sock_.get_stream( ).async_read_some( ba::buffer(&mess[0],
-                                                            mess.size( )),
+            sock_.get_stream( ).async_read_some( ba::buffer(&(*mess)[0],
+                                                            mess->size( )),
                                                  std::move(this_cb) );
         }
 
