@@ -12,7 +12,7 @@ struct i_client: public std::enable_shared_from_this<i_client> {
     virtual ~i_client( ) = default;
     virtual void close( ) = 0;
     virtual void async_read( read_cb ) = 0;
-    virtual void async_write_all(  ) = 0;
+    virtual void async_write_all( std::string ) = 0;
 };
 
 using accept_cb = std::function<void ( const error_code &,

@@ -44,7 +44,7 @@ struct tcp_acceptor: public i_accept {
             sock_.async_read_some( ba::buffer(block_), std::move(this_cb) );
         }
 
-        void async_write_all(  )
+        void async_write_all( std::string mess )
         {
 
         }
@@ -91,20 +91,8 @@ struct tcp_acceptor: public i_accept {
 };
 
 int main_c( );
-
-struct test_call {
-    void call( )
-    {
-        count_ ++;
-    }
-    std::size_t count_ = 0;
-};
-
-
-
 int main_s( )
 {
-
     try {
 
         ba::io_service ios;
@@ -114,10 +102,13 @@ int main_s( )
 
         ta->async_accept( [ta](const error_code &e, std::shared_ptr<i_client> c) {
             std::cout << e.message( ) << " Accept!\n";
-            c->async_read( [ta, c]( const error_code &e, std::size_t l ) {
-                std::cout << e.message( ) <<  ": Read " << l << " bytes!\n";
-                ta->acc_.get_io_service( ).stop( );
-            } );
+
+            auto call = [ta, c ]( const error_code &e, std::size_t l ) {
+                std::cout << e.message( ) <<  ": Read " << l << " bytes! "
+                          << std::endl;
+                // ta->acc_.get_io_service( ).stop( );
+            };
+            c->async_read( call );
         } );
 
         ios.run( );
