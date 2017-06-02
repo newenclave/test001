@@ -3,9 +3,11 @@
 
 #include <string>
 #include <queue>
-#include "boost/asio.hpp"
 
+#include "boost/asio.hpp"
 #include "/home/data/github/etool/include/etool/slices/memory.h"
+
+#include "message.h"
 
 using buffer = etool::slices::memory<char>;
 
@@ -19,7 +21,7 @@ struct stream_writer {
     using weak_pointer = std::weak_ptr<void>;
     using error_code   = boost::system::error_code;
 
-    struct queue_element {
+    struct queue_element: public message {
 
         queue_element(message_type mess)
             :message(std::move(mess))
@@ -28,33 +30,43 @@ struct stream_writer {
         virtual
         ~queue_element( ) = default;
 
-        virtual
-        void pre( )
-        { }
-
-        virtual
-        void post( const error_code &, std::size_t )
-        { }
-
-        message_type &get( )
+        const char *data( ) const override
         {
-            return message;
+            return message.c_str( );
+        }
+
+        std::size_t size( ) const override
+        {
+            return message.size( );
+        }
+
+        void precall( ) override
+        {
+
+        }
+
+        void postcall( const error_code &, std::size_t ) override
+        {
+
         }
 
         message_type message;
     };
 
-    using queue_element_sptr = std::shared_ptr<queue_element>;
-    using message_queue      = std::queue<queue_element_sptr>;
+    using message_sptr  = std::shared_ptr<queue_element>;
+    using message_uptr  = std::shared_ptr<queue_element>;
+    using message_queue = std::queue<message_uptr>;
 
-    std::shared_ptr<queue_element> make_element( message_type mess )
+    message_uptr make_element( message_type mess )
     {
-        return std::make_shared<queue_element>(std::move(mess));
+        message_uptr res(new queue_element(std::move(mess)));
+        return res;
     }
 
     stream_writer( boost::asio::io_service &ios )
         :dispatcher_(ios)
         ,stream_(ios)
+        ,active_(true)
     { }
 
     stream_type &get_stream( )
@@ -67,16 +79,23 @@ struct stream_writer {
         return stream_;
     }
 
-    void async_write( weak_pointer wp )
+    void set_active( bool val )
     {
-        message_type &top( queue_.front( )->message );
-        queue_.front( )->pre( );
-        async_write( top.data( ), top.size( ), 0, std::move(wp) );
+        active_ = val;
     }
 
     bool active( ) const
     {
-        return true;
+        return active_;
+    }
+
+private:
+
+    void async_write( weak_pointer wp )
+    {
+        auto &top( queue_.front( ) );
+        top->precall( );
+        async_write( top->data( ), top->size( ), 0, std::move(wp) );
     }
 
     void async_write( const char *data, size_t length, size_t total,
@@ -84,15 +103,13 @@ struct stream_writer {
     {
         namespace ph = std::placeholders;
         if( active( ) ) {
-            get_stream( ).async_write_some(
-                    boost::asio::buffer(data, length),
-                    dispatcher_.wrap(
-                        std::bind( &this_type::write_handler, this,
-                                    ph::_1, ph::_2,
-                                    length, total,
-                                    std::move(wp) )
-                    )
-            );
+
+            auto handler = std::bind( &this_type::write_handler, this,
+                                      ph::_1, ph::_2, length, total,
+                                      std::move(wp) );
+
+            get_stream( ).async_write_some( boost::asio::buffer( data, length ),
+                                       dispatcher_.wrap( std::move(handler) ) );
         }
     }
 
@@ -107,9 +124,11 @@ struct stream_writer {
             return;
         }
 
+        std::error_code ec(error.value( ), std::system_category( ));
+
         auto &top( *queue_.front( ) );
 
-        if( !error ) {
+        if( !ec ) {
 
             if( bytes < length ) {
 
@@ -122,7 +141,7 @@ struct stream_writer {
 
             } else {
 
-                top.post( error, bytes );
+                top.postcall( ec, bytes );
 
                 queue_.pop( );
 
@@ -133,7 +152,7 @@ struct stream_writer {
 
         } else {
 
-            top.post( error, bytes );
+            top.postcall( ec, bytes );
 
             /// pop queue
             queue_.pop( );
@@ -145,7 +164,7 @@ struct stream_writer {
 
     }
 
-    void write_impl( queue_element_sptr message, weak_pointer wp )
+    void write_impl( message_uptr message, weak_pointer wp )
     {
         auto sp = wp.lock( );
         if( !sp ) {
@@ -153,16 +172,18 @@ struct stream_writer {
         }
 
         const bool empty = queue_.empty( );
-        queue_.emplace( message );
+        queue_.emplace( std::move(message) );
         if( empty ) {
             async_write( std::move(wp) );
         }
     }
 
-    void write( queue_element_sptr message, weak_pointer wp )
+public:
+
+    void write( message_uptr message, weak_pointer wp )
     {
         dispatcher_.post( std::bind( &this_type::write_impl, this,
-                                     message, wp ) );
+                                     std::move(message), std::move(wp) ) );
 
     }
 
@@ -179,6 +200,7 @@ struct stream_writer {
     boost::asio::io_service::strand dispatcher_;
     stream_type                     stream_;
     message_queue                   queue_;
+    bool                            active_;
 };
 
 #endif // SREAM_WRITER_H

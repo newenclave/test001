@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 2.8)
 
+set( CMAKE_CXX_STANDARD          11 )
+set( CMAKE_CXX_STANDARD_REQUIRED 11 )
+
 if( ASIO_STANDALONE_DIR )
     include_directories( ${ASIO_STANDALONE_DIR} )
     add_definitions( -DASIO_STANDALONE=1 )
