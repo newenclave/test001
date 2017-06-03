@@ -1,7 +1,13 @@
 #ifndef UDP_ACCEPTOR_H
 #define UDP_ACCEPTOR_H
 
+#include <queue>
+
 #include "ifaces.h"
+
+
+namespace ba = boost::asio;
+namespace bs = boost::system;
 
 struct udp_acceptor: public i_accept {
 
@@ -190,27 +196,38 @@ struct udp_acceptor: public i_accept {
                        size_t const bytes, acceptor_wptr wp )
     {
         auto sp = wp.lock( );
-        if( sp ) {
-            if( !error ) {
+        if( !sp )  {
+            return;
+        }
 
-                std::shared_ptr<udp_client> client;
-                auto f = clients_.find( sender_ );
-                if( f != clients_.end( ) ) {
-                    client = f->second.lock( );
-                }
+        if( !error ) {
 
-                if(client) {
-                    client->push_message( std::move(message_), bytes );
-                    message_.resize( 4096 );
-                } else {
-                    client = std::make_shared<udp_client>( get_io_service( ),
-                                                           shared_from_this( ));
-                }
+            std::shared_ptr<udp_client> client;
+            auto f = clients_.find( sender_ );
+            if( f != clients_.end( ) ) {
+                client = f->second.lock( );
+            }
 
-            } else {
+            if( !client ) {
+                client = std::make_shared<udp_client>( get_io_service( ),
+                                                       shared_from_this( ));
                 if(current_) {
-                    current_(error, std::shared_ptr<i_client>( ) );
+                    current_(error, client);
+                    current_ = accept_cb( );
+                } else {
+                    backlog_.push( client );
+                    if(backlog_.size( ) > 5) {
+                        backlog_.pop( );
+                    }
                 }
+            }
+
+            client->push_message( std::move(message_), bytes );
+            start_read( );
+
+        } else {
+            if(current_) {
+                current_(error, std::shared_ptr<i_client>( ) );
             }
         }
     }
@@ -221,7 +238,8 @@ struct udp_acceptor: public i_accept {
 
         std::weak_ptr<i_accept> wp = shared_from_this( );
         sender_ = ep( );
-        sock_.async_receive_from( ba::buffer(&message_[0], message_.size( )),
+        message_.resize(4094);
+        sock_.async_receive_from( ba::buffer( &message_[0], message_.size( ) ),
                     sender_, 0,
                     dispatcher_.wrap(
                         std::bind(&udp_acceptor::read_handler, this,
@@ -238,9 +256,17 @@ struct udp_acceptor: public i_accept {
             if( !sp ) {
                 return;
             }
-            current_( error_code(0, boost::system::system_category( ) ),
-                      std::shared_ptr<i_client>( ) );
-            current_ = std::move(cb);
+            if( !backlog_.empty( ) ) {
+                auto cli = backlog_.front( );
+                backlog_.pop( );
+                cb( error_code(0, boost::system::system_category( ) ), cli );
+            } else {
+                if( current_ ) {
+                    current_( error_code(1, boost::system::system_category( ) ),
+                              std::shared_ptr<i_client>( ) );
+                }
+                current_ = std::move(cb);
+            }
         } );
     }
 
@@ -255,6 +281,7 @@ struct udp_acceptor: public i_accept {
     accept_cb               current_;
     ep                      sender_;
     std::map<ep, std::weak_ptr<udp_client> > clients_;
+    std::queue<std::shared_ptr<udp_client> > backlog_;
     std::queue<to_message>  queue_;
 };
 

@@ -1,16 +1,22 @@
 #include <iostream>
 #include <memory>
 #include <map>
+#include <set>
 
 #include "ifaces.h"
 #include "stream_writer.h"
 #include "tcp_acceptor.h"
 #include "udp_acceptor.h"
 
+int count = 0;
+
+std::set<std::shared_ptr<i_client> > clients;
+
+
 int main_c( );
 int main_s( )
 {
-    try {
+//    try {
 
         ba::io_service ios( 1 );
         ba::io_service::work wrk(ios);
@@ -18,6 +24,7 @@ int main_s( )
 
         auto ta = std::make_shared<udp_acceptor>(std::ref(ios));
 
+        ta->start_read( );
         ta->async_accept( [ta, &message](const error_code &e,
                                          std::shared_ptr<i_client> c)
         {
@@ -26,16 +33,16 @@ int main_s( )
             auto call = [ta, c ]( const error_code &e, std::size_t l ) {
                 std::cout << e.message( ) <<  ": Read " << l << " bytes! "
                           << std::endl;
-                // ta->acc_.get_io_service( ).stop( );
+                ta->sock_.get_io_service( ).stop( );
             };
             c->async_read( &message, call );
         } );
 
         ios.run( );
 
-    } catch( const std::exception &ex ) {
-        std::cerr << "G Error: " << ex.what( ) << "\n";
-    }
+//    } catch( const std::exception &ex ) {
+//        std::cerr << "G Error: " << ex.what( ) << "\n";
+//    }
 
     return 0;
 }

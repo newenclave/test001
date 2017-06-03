@@ -17,7 +17,7 @@ struct tcp_acceptor: public i_accept {
 
         void close( ) override
         {
-            sock_.get_stream( ).close( );
+            sock_.get_socket( ).close( );
         }
 
         void async_read( message_type * mess, read_cb cb ) override
@@ -38,7 +38,7 @@ struct tcp_acceptor: public i_accept {
                     return;
                 }
             };
-            sock_.get_stream( ).async_read_some( ba::buffer(&(*mess)[0],
+            sock_.get_socket( ).async_read_some( ba::buffer(&(*mess)[0],
                                                             mess->size( )),
                                                  std::move(this_cb) );
         }
@@ -46,7 +46,7 @@ struct tcp_acceptor: public i_accept {
         std::uintptr_t native_handle( ) override
         {
             using uptr = std::uintptr_t;
-            return static_cast<uptr>(sock_.get_stream( ).native_handle( ));
+            return static_cast<uptr>(sock_.get_socket( ).native_handle( ));
         }
 
         void async_write_all( message::unique_ptr mess ) override
@@ -88,7 +88,7 @@ struct tcp_acceptor: public i_accept {
             cb( err, std::shared_ptr<i_client>( ) );
         };
 
-        acc_.async_accept( client->sock_.get_stream( ), std::move(this_cb) );
+        acc_.async_accept( client->sock_.get_socket( ), std::move(this_cb) );
     }
 
     ba::ip::tcp::acceptor acc_;

@@ -1,54 +1,37 @@
 #include <iostream>
 
-#include "ifaces.h"
-#include "stream_writer.h"
+#include "tcp_connector.h"
+#include "udp_connector.h"
 
-namespace ba = boost::asio;
-namespace bs = boost::system;
+message::unique_ptr make_message( std::string mess )
+{
+    struct m: public message {
+        m(std::string mess)
+            :mm_(std::move(mess))
+        { }
+        const char *data( ) const
+        {
+            return mm_.c_str( );
+        }
 
-struct tcp_connector: public i_client {
+        std::size_t size( ) const
+        {
+            return mm_.size( );
+        }
 
-    tcp_connector( ba::io_service &ios )
-        :sock_(ios)
-    {
-        sock_.get_stream( ).open( ba::ip::tcp::v4( ) );
-    }
+        void precall( )
+        {
+            std::cout << "Precall!\n";
+        }
+        void postcall( const error_code &ec, std::size_t len)
+        {
+            std::cout << "Postcall! " << ec.message( ) << " " << len << "\n";
 
-    void connect( const char *addr, std::uint16_t port )
-    {
-        using tcp_ep = ba::ip::tcp::endpoint;
-        sock_.get_stream( ).connect(
-                    tcp_ep(ba::ip::address::from_string(addr), port) );
-    }
-
-    void close( ) override
-    {
-        sock_.get_stream( ).close( );
-    }
-
-    void async_read( std::string *, read_cb ) override
-    {
-
-    }
-
-    std::uintptr_t native_handle( ) override
-    {
-        using uptr = std::uintptr_t;
-        return static_cast<uptr>(sock_.get_stream( ).native_handle( ));
-    }
-
-    void async_write_all( message::unique_ptr mess ) override
-    {
-        sock_.write( std::move(mess), shared_from_this( ) );
-    }
-
-    void async_write( message_type message )
-    {
-        sock_.write( std::move(message), shared_from_this( ) );
-    }
-
-    stream_writer<ba::ip::tcp::socket> sock_;
-};
+        }
+        std::string mm_;
+    };
+    return message::unique_ptr(new m(std::move(mess)));
+}
 
 int main_c( )
 {
@@ -57,10 +40,10 @@ int main_c( )
         ba::io_service ios;
         ba::io_service::work wrk(ios);
 
-        auto tcp_conn = std::make_shared<tcp_connector>(std::ref(ios));
+        auto tcp_conn = std::make_shared<udp_connector>(std::ref(ios));
 
-        tcp_conn->connect( "127.0.0.1", 44556 );
-        tcp_conn->async_write( std::string(1024 * 1024, '!') );
+        tcp_conn->connect( "127.0.0.1", 44557 );
+        tcp_conn->async_write_all( make_message(std::string(1024, '!')) );
 
         ios.run( );
 

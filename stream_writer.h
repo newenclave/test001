@@ -14,7 +14,7 @@ using buffer = etool::slices::memory<char>;
 template <typename StreamType, typename MessageT = std::string>
 struct stream_writer {
 
-    using stream_type  = StreamType;
+    using socket_type  = StreamType;
     using message_type = MessageT;
     using this_type = stream_writer<StreamType, MessageT>;
 
@@ -64,12 +64,12 @@ struct stream_writer {
         ,active_(true)
     { }
 
-    stream_type &get_stream( )
+    socket_type &get_socket( )
     {
         return stream_;
     }
 
-    const stream_type &get_stream( ) const
+    const socket_type &get_socket( ) const
     {
         return stream_;
     }
@@ -103,7 +103,7 @@ private:
                                       ph::_1, ph::_2, length, total,
                                       std::move(wp) );
 
-            get_stream( ).async_write_some( boost::asio::buffer( data, length ),
+            get_socket( ).async_write_some( boost::asio::buffer( data, length ),
                                        dispatcher_.wrap( std::move(handler) ) );
         }
     }
@@ -192,7 +192,7 @@ public:
     }
 
     boost::asio::io_service::strand dispatcher_;
-    stream_type                     stream_;
+    socket_type                     stream_;
     message_queue                   queue_;
     bool                            active_;
 };
