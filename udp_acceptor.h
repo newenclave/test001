@@ -46,19 +46,34 @@ struct udp_acceptor: public i_accept {
             spp->remove_client( std::move(my_) );
         }
 
-        void async_read( message_type *mess, read_cb cb ) override
+        message_type &last_message( ) override
+        {
+            return message_;
+        }
+
+        void async_read( std::size_t maximum, read_cb cb ) override
         {
             weak_type wp = shared_from_this( );
-            dispatcher_.post( [this, wp, mess, cb]( ) {
+            dispatcher_.post( [this, wp, maximum, cb]( ) {
                 auto sp = wp.lock( );
                 if( !sp ) {
                     return;
                 }
-                if( read_ ) {
-                    read_(error_code(0, bs::system_category( )), 0);
+                if( queue_.empty( ) ) {
+                    if( read_ ) {
+                        read_(error_code(0, bs::system_category( )), 0);
+                    }
+
+                    read_ = std::move(cb);
+                    message_.resize( maximum );
+                } else {
+                    auto &m(queue_.front( ));
+                    if(m.size( ) > maximum) {
+                        m.resize( maximum );
+                        message_.swap(m);
+                        queue_.pop( );
+                    }
                 }
-                read_       = std::move(cb);
-                read_param_ = mess;
             } );
         }
 
@@ -83,13 +98,16 @@ struct udp_acceptor: public i_accept {
             if( !sp ) {
                 return;
             }
-            if( read_ ) {
-                read_param_->swap(mess);
-                error_code ec(0, bs::system_category( ));
-                read_( ec, mess.size( ) );
 
+            if( read_ ) {
+
+                if( mess.size( ) > message_.size( ) ) {
+                    mess.resize( message_.size( ) );
+                }
+                message_.swap(mess);
+                error_code ec(0, bs::system_category( ));
+                read_( ec, message_.size( ) );
                 read_ = read_cb( );
-                read_param_ = nullptr;
 
             } else {
                 queue_.emplace(std::move(mess));
@@ -110,7 +128,7 @@ struct udp_acceptor: public i_accept {
 
         std::queue<message_type> queue_;
         read_cb       read_;
-        message_type *read_param_;
+        message_type  message_;
         ep            my_;
 
     };

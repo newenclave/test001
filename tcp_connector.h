@@ -28,9 +28,14 @@ struct tcp_connector: public i_client {
         sock_.get_socket( ).close( );
     }
 
-    void async_read( std::string *, read_cb ) override
+    void async_read( std::size_t, read_cb ) override
     {
 
+    }
+
+    message_type &last_message( ) override
+    {
+        return message_;
     }
 
     std::uintptr_t native_handle( ) override
@@ -49,6 +54,7 @@ struct tcp_connector: public i_client {
         sock_.write( std::move(message), shared_from_this( ) );
     }
 
+    std::string message_;
     stream_writer<ba::ip::tcp::socket> sock_;
 };
 

@@ -20,13 +20,13 @@ struct tcp_acceptor: public i_accept {
             sock_.get_socket( ).close( );
         }
 
-        void async_read( message_type * mess, read_cb cb ) override
+        void async_read( std::size_t maximum, read_cb cb ) override
         {
             std::weak_ptr<i_client> weak_this(shared_from_this( ));
 
+            message_.resize( maximum );
             auto this_cb = [cb, weak_this](const error_code &e, std::size_t l) {
                 if( e ) {
-                    std::cout << "read error " << e.message( ) << "\n";
                     cb(e, 0);
                     return;
                 }
@@ -38,9 +38,14 @@ struct tcp_acceptor: public i_accept {
                     return;
                 }
             };
-            sock_.get_socket( ).async_read_some( ba::buffer(&(*mess)[0],
-                                                            mess->size( )),
+            sock_.get_socket( ).async_read_some( ba::buffer(&message_[0],
+                                                             message_.size( )),
                                                  std::move(this_cb) );
+        }
+
+        message_type &last_message( ) override
+        {
+            return message_;
         }
 
         std::uintptr_t native_handle( ) override
@@ -54,6 +59,7 @@ struct tcp_acceptor: public i_accept {
             sock_.write( std::move(mess), shared_from_this( ) );
         }
 
+        std::string             message_;
         std::weak_ptr<i_accept> parent_;
         stream_writer<ba::ip::tcp::socket> sock_;
     };

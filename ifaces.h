@@ -15,8 +15,9 @@ using message_type = std::string;
 struct i_client: public std::enable_shared_from_this<i_client> {
     virtual ~i_client( ) = default;
     virtual void close( ) = 0;
-    virtual void async_read( message_type *, read_cb ) = 0;
+    virtual void async_read( std::size_t, read_cb ) = 0;
     virtual void async_write_all( message::unique_ptr ) = 0;
+    virtual message_type &last_message( ) = 0;
     virtual std::uintptr_t native_handle( ) = 0;
 };
 
